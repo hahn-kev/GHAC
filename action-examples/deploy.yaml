@@ -1,0 +1,65 @@
+﻿name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version of the image to deploy'
+        type: string
+        required: true
+      image:
+        description: 'The image to update'
+        type: string
+        required: true
+  workflow_call:
+    inputs:
+      version:
+        description: 'The version of the image to deploy'
+        type: string
+        required: true
+      image:
+        description: 'The image to update'
+        type: string
+        required: true
+
+jobs:
+  deploy:
+    concurrency: deploy-staging
+    runs-on: ubuntu-latest
+    if: ${{ github.ref ==  vars.PROD_BRANCH }}
+    environment:
+      name: staging
+      url: https://staging.languagedepot.org
+    steps:
+      - name: Checkout lexbox repo
+        uses: actions/checkout@v3
+        with:
+          path: lexbox
+      - name: Run kustomize
+        working-directory: lexbox/deployment/staging
+        run: |
+          kubectl kustomize . -o resources.yaml
+      - name: Checkout fleet repo
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ vars.FLEET_REPO }}
+          ssh-key: ${{ secrets.FLEET_REPO_SSH_KEY }}
+          path: fleet
+      - name: Copy yaml resources to fleet repo
+        run: |
+          cp lexbox/deployment/staging/resources.yaml fleet/languageforge-lexbox/
+#        this kustomization file is in the fleet repo and only modifies the image versions being used.
+      - name: Update image version in fleet kustomization.yaml
+        uses: mikefarah/yq@v4.34.2
+        with:
+          cmd: yq eval -i '(.images.[] | select(.name == "${{ inputs.image }}").newTag) = "${{ inputs.version }}"' "fleet/languageforge-lexbox/kustomization.yaml"
+      - name: Push to fleet repo
+#        https://github.com/EndBug/add-and-commit
+        uses: EndBug/add-and-commit@v9
+        with:
+          default_author: github_actions
+          message: "[Lexbox] Update image: ${{ inputs.image }} to ${{ inputs.version }}"
+          cwd: './fleet/'
+          add: 'languageforge-lexbox/*'
+          push: true
+
+

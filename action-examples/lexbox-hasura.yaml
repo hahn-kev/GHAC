@@ -1,0 +1,62 @@
+name: hasura
+
+# https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#on
+on:
+  push:
+    paths:
+      - 'hasura/**'
+      - '.github/workflows/lexbox-hasura.yaml'
+    branches:
+      - main
+      - develop
+  pull_request:
+    paths:
+      - 'hasura/**'
+      - '.github/workflows/lexbox-hasura.yaml'
+    branches:
+      - main
+      - develop
+
+env:
+  PROD_RELEASE: ${{github.ref == vars.PROD_BRANCH}}
+jobs:
+  publish-hasura:
+    runs-on: ubuntu-latest
+
+    env:
+      # https://docs.docker.com/develop/develop-images/build_enhancements/
+      DOCKER_BUILDKIT: 1
+
+    steps:
+      -
+        uses: actions/checkout@v3
+      - name: Set Version
+        id: setVersion
+        # set version to date in vYYYY-MM-DD format
+        run: |
+          echo "VERSION=v$(date --rfc-3339=date)" >> ${GITHUB_ENV}
+
+      - name: Docker meta
+        id: meta
+        if: ${{ !env.ACT }}
+        uses: docker/metadata-action@v4
+        with:
+          images: ghcr.io/sillsdev/lexbox-hasura
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,enable=${{ env.PROD_RELEASE }},value=latest
+            type=raw,enable=${{ env.PROD_RELEASE }},value=${{ env.VERSION }}
+      -
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      -
+        uses: docker/build-push-action@v4
+        with:
+          context: hasura
+          push: ${{ !env.ACT }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
