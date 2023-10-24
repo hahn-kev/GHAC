@@ -1,5 +1,5 @@
 import { parse } from "yaml";
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'path';
 
 interface Workflow {
@@ -125,4 +125,4 @@ const md = `
 ${'```mermaid'}
 ${mermaidTemplate}
 ${'```'}`;
-Bun.write('./action-examples/mermaid.md', md);
+writeFile('mermaid.md', md);
